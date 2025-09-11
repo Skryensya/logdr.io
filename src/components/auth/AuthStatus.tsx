@@ -2,9 +2,11 @@
 
 import { useAuth } from "@/contexts/AuthContext";
 import { useAuthLifecycle } from "@/hooks/useAuthLifecycle";
+import { useSession } from "next-auth/react";
 
 export default function AuthStatus() {
   const { user, isAuthenticated, isFirstTimeLogin, isLoading } = useAuth();
+  const sessionInfo = useSession();
 
   // Use the lifecycle hook to handle auth events
   useAuthLifecycle({
@@ -37,12 +39,19 @@ export default function AuthStatus() {
     );
   }
 
+  const expiresAt = sessionInfo.data?.expires ? new Date(sessionInfo.data.expires) : null;
+
   return (
     <div className="p-4 bg-green-100 dark:bg-green-900 rounded-lg">
       <h3 className="font-medium text-green-800 dark:text-green-200">Auth Status</h3>
       <p className="text-green-700 dark:text-green-300">
         Authenticated as: {user?.name} ({user?.email})
       </p>
+      {expiresAt && (
+        <p className="text-xs text-green-600 dark:text-green-400 mt-1">
+          Session expires: {expiresAt.toLocaleString('es-ES')}
+        </p>
+      )}
       {isFirstTimeLogin && (
         <div className="mt-2 p-2 bg-blue-100 dark:bg-blue-900 rounded">
           <p className="text-blue-800 dark:text-blue-200 text-sm">

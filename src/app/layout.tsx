@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import { SessionProvider } from "next-auth/react";
@@ -17,15 +17,6 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   title: "Logdrio",
   description: "Professional log analysis and monitoring platform",
-  themeColor: "#16161d",
-  viewport: {
-    width: "device-width",
-    initialScale: 1.0,
-    minimumScale: 1.0,
-    maximumScale: 1.0,
-    userScalable: false,
-    viewportFit: "cover",
-  },
   formatDetection: {
     telephone: true,
   },
@@ -41,13 +32,23 @@ export const metadata: Metadata = {
   },
 };
 
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1.0,
+  minimumScale: 1.0,
+  maximumScale: 1.0,
+  userScalable: false,
+  viewportFit: "cover",
+  themeColor: "#16161d",
+};
+
 export default function RootLayout({
   children,
 }: Readonly<{
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en">
+    <html lang="es" suppressHydrationWarning>
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased`}
       >

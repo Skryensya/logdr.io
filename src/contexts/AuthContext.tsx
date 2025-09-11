@@ -2,6 +2,7 @@
 
 import React, { createContext, useContext, useEffect, useState } from "react";
 import { useSession } from "next-auth/react";
+import { initializeUserPreferences } from "@/lib/logdrioDB";
 
 interface User {
   id?: string;
@@ -85,14 +86,34 @@ export function AuthContextProvider({ children }: { children: React.ReactNode })
   };
 
   // Lifecycle event handlers
-  const onLogin = (user: User) => {
+  const onLogin = async (user: User) => {
     // Add custom logic for regular login
     console.log("User logged in:", user);
+    
+    // Initialize user preferences
+    if (user.email) {
+      try {
+        await initializeUserPreferences(user.email);
+      } catch (error) {
+        console.error("Error initializing user preferences:", error);
+      }
+    }
   };
 
-  const onFirstTimeLogin = (user: User) => {
+  const onFirstTimeLogin = async (user: User) => {
     // Add custom logic for first-time login
     console.log("First time user:", user);
+    
+    // Initialize user preferences for first-time users
+    if (user.email) {
+      try {
+        await initializeUserPreferences(user.email);
+        console.log("User preferences created for first-time user");
+      } catch (error) {
+        console.error("Error creating preferences for first-time user:", error);
+      }
+    }
+    
     // You could show onboarding, track analytics, etc.
   };
 
