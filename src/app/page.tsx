@@ -2,6 +2,7 @@
 
 import Image from "next/image";
 import { useIsAppOffline } from "@/hooks/useIsAppOffline";
+import LoginButton from "@/components/auth/LoginButton";
 
 
 export default function Home() {
@@ -27,6 +28,10 @@ export default function Home() {
             <div className={`w-2 h-2 rounded-full ${isOffline ? 'bg-red-500' : 'bg-green-500'}`} />
             {isOffline ? 'App is offline' : 'App is online'}
           </div>
+        </div>
+
+        <div className="mb-8">
+          <LoginButton />
         </div>
 
         <ol className="font-mono list-inside list-decimal text-sm/6 text-center sm:text-left">
