@@ -3,6 +3,7 @@
 import Image from "next/image";
 import { useIsAppOffline } from "@/hooks/useIsAppOffline";
 import LoginButton from "@/components/auth/LoginButton";
+import AuthStatus from "@/components/auth/AuthStatus";
 
 
 export default function Home() {
@@ -30,8 +31,9 @@ export default function Home() {
           </div>
         </div>
 
-        <div className="mb-8">
+        <div className="mb-8 space-y-4">
           <LoginButton />
+          <AuthStatus />
         </div>
 
         <ol className="font-mono list-inside list-decimal text-sm/6 text-center sm:text-left">
