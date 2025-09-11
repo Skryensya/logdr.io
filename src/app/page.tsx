@@ -1,6 +1,12 @@
+"use client";
+
 import Image from "next/image";
+import { useIsAppOffline } from "@/hooks/useIsAppOffline";
+
 
 export default function Home() {
+  const isOffline = useIsAppOffline();
+
   return (
     <div className="font-sans grid grid-rows-[20px_1fr_20px] items-center justify-items-center min-h-screen p-8 pb-20 gap-16 sm:p-20">
       <main className="flex flex-col gap-[32px] row-start-2 items-center sm:items-start">
@@ -12,6 +18,17 @@ export default function Home() {
           height={38}
           priority
         />
+        <div className="mb-4 text-center">
+          <div className={`inline-flex items-center gap-2 px-3 py-1 rounded-full text-sm font-medium ${
+            isOffline 
+              ? 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200' 
+              : 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200'
+          }`}>
+            <div className={`w-2 h-2 rounded-full ${isOffline ? 'bg-red-500' : 'bg-green-500'}`} />
+            {isOffline ? 'App is offline' : 'App is online'}
+          </div>
+        </div>
+
         <ol className="font-mono list-inside list-decimal text-sm/6 text-center sm:text-left">
           <li className="mb-2 tracking-[-.01em]">
             Get started by editing{" "}
