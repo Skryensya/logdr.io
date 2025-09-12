@@ -3,7 +3,7 @@
  * This file demonstrates how to use the new PouchDB offline-first system
  */
 
-import { dbIntegration } from '@/lib/database-integration';
+import { createValidatedUserDatabase } from '@/lib/database';
 import { createQueries } from '@/lib/queries';
 import { MoneyAmount } from '@/lib/currency';
 
@@ -15,12 +15,18 @@ export async function setupNewUserDemo(userId: string, email: string, displayNam
   
   try {
     // Initialize database for user
-    const db = await dbIntegration.setupNewUser(userId, email, displayName, 'USD');
+    const db = await createValidatedUserDatabase(userId);
+    
+    // Update user info
+    await db.updateUser({
+      email,
+      displayName,
+      homeCurrency: 'USD',
+      locale: 'en-US'
+    });
     console.log('✅ User database initialized');
 
-    // Check health
-    const health = await dbIntegration.healthCheck();
-    console.log('Health check:', health);
+    console.log('✅ User setup completed successfully');
 
     return db;
   } catch (error) {
@@ -35,10 +41,8 @@ export async function setupNewUserDemo(userId: string, email: string, displayNam
 export async function createSampleDataDemo() {
   console.log('=== Phase 1 Demo: Creating sample data ===');
   
-  const db = dbIntegration.getCurrentDatabase();
-  if (!db) {
-    throw new Error('No active database session');
-  }
+  // For demo purposes, create a new database instance
+  const db = await createValidatedUserDatabase('demo-user');
 
   try {
     // Create additional accounts
@@ -76,10 +80,8 @@ export async function createSampleDataDemo() {
 export async function createTransactionDemo() {
   console.log('=== Phase 1 Demo: Creating double-entry transaction ===');
   
-  const db = dbIntegration.getCurrentDatabase();
-  if (!db) {
-    throw new Error('No active database session');
-  }
+  // For demo purposes, create a new database instance
+  const db = await createValidatedUserDatabase('demo-user');
 
   try {
     // Get accounts
@@ -143,10 +145,8 @@ export async function createTransactionDemo() {
 export async function queryDataDemo() {
   console.log('=== Phase 1 Demo: Querying data with views ===');
   
-  const db = dbIntegration.getCurrentDatabase();
-  if (!db) {
-    throw new Error('No active database session');
-  }
+  // For demo purposes, create a new database instance
+  const db = await createValidatedUserDatabase('demo-user');
 
   try {
     const queries = createQueries(db);
@@ -232,7 +232,7 @@ export async function runCompletePhase1Demo() {
     console.log('\n✅ Phase 1 demo completed successfully!');
     
     // Final health check
-    const health = await dbIntegration.healthCheck();
+    console.log('\u2705 Performance demo completed');
     console.log('\n🏥 Final health check:', health);
     
   } catch (error) {

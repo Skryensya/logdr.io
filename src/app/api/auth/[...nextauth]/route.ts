@@ -8,7 +8,7 @@ const handler = NextAuth({
       clientSecret: process.env.GOOGLE_CLIENT_SECRET!,
       authorization: {
         params: {
-          prompt: "select_account", // This will always show account picker
+          prompt: "select_account",
           access_type: "offline",
           response_type: "code",
         },
@@ -17,42 +17,15 @@ const handler = NextAuth({
   ],
   session: {
     strategy: "jwt",
-    maxAge: 2 * 24 * 60 * 60, // 2 days in seconds
-  },
-  jwt: {
-    maxAge: 2 * 24 * 60 * 60, // 2 days in seconds
+    maxAge: 2 * 24 * 60 * 60, // 2 days
   },
   callbacks: {
-    async signIn({ user, account, profile }) {
-      console.log("SignIn callback:", { user, account, profile });
-      return true;
-    },
     async session({ session, token }) {
-      if (session.user) {
+      if (session.user && token.sub) {
         // @ts-expect-error - NextAuth types don't include id field
-        session.user.id = token.sub!;
+        session.user.id = token.sub;
       }
-      // Add expiration info to session
-      session.expires = new Date(Date.now() + 2 * 24 * 60 * 60 * 1000).toISOString(); // 2 days from now
       return session;
-    },
-    async jwt({ token, user, account }) {
-      if (user) {
-        token.uid = user.id;
-      }
-      // Set token expiration
-      const now = Date.now();
-      const twoDays = 2 * 24 * 60 * 60 * 1000; // 2 days in milliseconds
-      token.exp = Math.floor((now + twoDays) / 1000); // JWT exp is in seconds
-      return token;
-    },
-  },
-  events: {
-    async signIn({ user, account, profile, isNewUser }) {
-      console.log("SignIn event:", { user, account, profile, isNewUser });
-    },
-    async signOut({ session, token }) {
-      console.log("SignOut event:", { session, token });
     },
   },
 })

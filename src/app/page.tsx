@@ -1,47 +1,49 @@
 "use client";
 
-import { useIsAppOffline } from "@/hooks/useIsAppOffline";
-import AuthStatus from "@/components/auth/AuthStatus";
-import AppLayout from "@/components/layout/AppLayout";
-import { Badge } from "@/components/ui/badge";
-import { Card, CardContent } from "@/components/ui/card";
+import { useState, useEffect } from 'react';
+import { useAuth } from '@/contexts/AuthContext';
+import MainLayout, { TabValue } from '@/components/layout/MainLayout';
+import DashboardTab from '@/components/tabs/DashboardTab';
+import AccountsTab from '@/components/tabs/AccountsTab';
+import TransactionsTab from '@/components/tabs/TransactionsTab';
+import CategoriesTab from '@/components/tabs/CategoriesTab';
 
 export default function Home() {
-  const isOffline = useIsAppOffline();
+  const [activeTab, setActiveTab] = useState<TabValue>('dashboard');
+  const { isAuthenticated, isLoading, loginAsGuest } = useAuth();
 
-  return (
-    <AppLayout>
-      <div className="space-y-8">
-        {/* Hero Section */}
+  const tabContents = {
+    dashboard: <DashboardTab />,
+    accounts: <AccountsTab />,
+    transactions: <TransactionsTab />,
+    categories: <CategoriesTab />
+  };
+
+  // Auto-login as guest when not authenticated
+  useEffect(() => {
+    if (!isAuthenticated && !isLoading) {
+      loginAsGuest();
+    }
+  }, [isAuthenticated, isLoading, loginAsGuest]);
+
+  // Show loading while initializing guest session
+  if (!isAuthenticated || isLoading) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center">
         <div className="text-center space-y-4">
-          <div className="flex justify-center">
-            <Badge 
-              variant={isOffline ? "destructive" : "default"}
-              className="flex items-center gap-2"
-            >
-              <div className={`w-2 h-2 rounded-full ${isOffline ? 'bg-red-500' : 'bg-green-500'}`} />
-              {isOffline ? 'App is offline' : 'App is online'}
-            </Badge>
-          </div>
-          
-          <div className="space-y-2">
-            <h1 className="text-3xl font-bold tracking-tight sm:text-4xl">
-              Bienvenido a Logdrio
-            </h1>
-            <p className="text-lg text-muted-foreground max-w-2xl mx-auto">
-              Tu plataforma personal para gestionar, analizar y monitorear logs de manera eficiente
-            </p>
-          </div>
+          <div className="w-8 h-8 border-2 border-primary border-t-transparent rounded-full animate-spin mx-auto" />
+          <p className="text-muted-foreground">Loading Logdrio...</p>
         </div>
-
-        {/* Auth Status Card */}
-        <Card className="border-dashed">
-          <CardContent className="pt-6">
-            <AuthStatus />
-          </CardContent>
-        </Card>
-
       </div>
-    </AppLayout>
+    );
+  }
+
+  // Show main app
+  return (
+    <MainLayout 
+      activeTab={activeTab} 
+      onTabChange={setActiveTab} 
+      tabContents={tabContents}
+    />
   );
 }

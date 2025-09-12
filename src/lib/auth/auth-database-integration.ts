@@ -1,5 +1,5 @@
 import { AuthStateManager, AuthEvent } from './auth-state-manager';
-import { dbIntegration } from '@/lib/database-integration';
+import { ValidatedLogdrioDatabase, createValidatedUserDatabase } from '@/lib/database';
 import { AuthState } from '@/types/database';
 
 /**
@@ -9,6 +9,7 @@ import { AuthState } from '@/types/database';
 export class AuthDatabaseIntegration {
   private authManager: AuthStateManager;
   private currentUserId: string | null = null;
+  private currentDB: ValidatedLogdrioDatabase | null = null;
   private isInitializing = false;
 
   constructor(authManager: AuthStateManager) {
@@ -64,7 +65,7 @@ export class AuthDatabaseIntegration {
       this.isInitializing = true;
 
       // Check if we need to switch users
-      const currentUserId = dbIntegration.getCurrentUserId();
+      const currentUserId = this.currentUserId;
       
       if (currentUserId !== userId) {
         console.log('User changed, switching database:', { from: currentUserId, to: userId });
@@ -89,15 +90,16 @@ export class AuthDatabaseIntegration {
       console.log('Switching to user database:', userId);
 
       // Close current session if exists
-      if (dbIntegration.hasActiveSession()) {
-        await dbIntegration.closeSession();
+      if (this.currentDB) {
+        await this.currentDB.destroy();
+        this.currentDB = null;
       }
 
       // Initialize database for new user
-      await dbIntegration.initializeForUser(userId, email);
+      this.currentDB = await createValidatedUserDatabase(userId);
       
       // Perform health check
-      const health = await dbIntegration.healthCheck();
+      const health = await this.healthCheck();
       console.log('Database health check after user switch:', health);
 
       // If this is a completely new user, set up defaults
@@ -118,22 +120,21 @@ export class AuthDatabaseIntegration {
    */
   private async setupNewUserDefaults(userId: string, email?: string): Promise<void> {
     try {
-      const db = dbIntegration.getCurrentDatabase();
-      if (!db) {
+      if (!this.currentDB) {
         throw new Error('No active database');
       }
 
       // Update user document with email if provided
       if (email) {
-        await db.updateUser({ 
+        await this.currentDB.updateUser({ 
           email,
           displayName: email.split('@')[0] // Use email prefix as display name
         });
       }
 
       // Create default accounts and categories
-      await dbIntegration.createDefaultAccounts();
-      await dbIntegration.createDefaultCategories();
+      await this.createDefaultAccounts();
+      await this.createDefaultCategories();
 
       console.log('New user defaults created successfully');
     } catch (error) {
@@ -150,8 +151,9 @@ export class AuthDatabaseIntegration {
       console.log('Handling user logout');
 
       // Close database session
-      if (dbIntegration.hasActiveSession()) {
-        await dbIntegration.closeSession();
+      if (this.currentDB) {
+        await this.currentDB.destroy();
+        this.currentDB = null;
       }
 
       this.currentUserId = null;
@@ -216,7 +218,7 @@ export class AuthDatabaseIntegration {
       // If user was authenticated, try to restore database session
       if ([AuthState.JWT_OK, AuthState.GATED, AuthState.UNLOCKED].includes(state) && userId) {
         try {
-          await dbIntegration.initializeForUser(userId);
+          this.currentDB = await createValidatedUserDatabase(userId);
           this.currentUserId = userId;
           console.log('Database session restored for user:', userId);
         } catch (error) {
@@ -238,10 +240,17 @@ export class AuthDatabaseIntegration {
   }
 
   /**
+   * Get current database instance
+   */
+  getCurrentDatabase(): ValidatedLogdrioDatabase | null {
+    return this.currentDB;
+  }
+
+  /**
    * Check if user database is ready
    */
   isDatabaseReady(): boolean {
-    return dbIntegration.hasActiveSession() && this.currentUserId !== null;
+    return this.currentDB !== null && this.currentUserId !== null;
   }
 
   /**
@@ -254,6 +263,85 @@ export class AuthDatabaseIntegration {
 
     const authStatus = this.authManager.getStatus();
     await this.switchToUser(this.currentUserId, authStatus.email);
+  }
+
+  /**
+   * Create default accounts for a new user
+   */
+  private async createDefaultAccounts(currency = 'USD'): Promise<void> {
+    if (!this.currentDB) {
+      throw new Error('No active database session');
+    }
+
+    const defaultAccounts = [
+      {
+        name: 'Cash',
+        type: 'asset' as const,
+        visible: true,
+        archived: false,
+        defaultCurrency: currency,
+        minorUnit: currency === 'CLP' ? 0 : 2,
+        balance: 0
+      },
+      {
+        name: 'Debit',
+        type: 'asset' as const,
+        visible: true,
+        archived: false,
+        defaultCurrency: currency,
+        minorUnit: currency === 'CLP' ? 0 : 2,
+        balance: 0
+      }
+    ];
+
+    for (const account of defaultAccounts) {
+      try {
+        await this.currentDB.createAccount(account);
+      } catch (error) {
+        console.warn('Could not create default account:', account.name, error);
+      }
+    }
+  }
+
+  /**
+   * Create default categories
+   */
+  private async createDefaultCategories(): Promise<void> {
+    if (!this.currentDB) {
+      throw new Error('No active database session');
+    }
+
+    const defaultCategories = [
+      {
+        name: 'Food & Dining',
+        kind: 'expense' as const,
+        color: '#FF6B6B',
+        icon: '🍽️',
+        archived: false
+      },
+      {
+        name: 'Transportation',
+        kind: 'expense' as const,
+        color: '#4ECDC4',
+        icon: '🚗',
+        archived: false
+      },
+      {
+        name: 'Salary',
+        kind: 'income' as const,
+        color: '#96CEB4',
+        icon: '💰',
+        archived: false
+      }
+    ];
+
+    for (const category of defaultCategories) {
+      try {
+        await this.currentDB.createCategory(category);
+      } catch (error) {
+        console.warn('Could not create default category:', category.name, error);
+      }
+    }
   }
 
   /**
@@ -272,7 +360,76 @@ export class AuthDatabaseIntegration {
       return null;
     }
 
-    return await dbIntegration.healthCheck();
+    return await this.healthCheck();
+  }
+
+  /**
+   * Verify database health
+   */
+  private async healthCheck(): Promise<{
+    isHealthy: boolean;
+    hasUser: boolean;
+    hasSettings: boolean;
+    accountCount: number;
+    categoryCount: number;
+    transactionCount: number;
+    errors: string[];
+  }> {
+    const errors: string[] = [];
+    let isHealthy = true;
+    let hasUser = false;
+    let hasSettings = false;
+    let accountCount = 0;
+    let categoryCount = 0;
+    let transactionCount = 0;
+
+    if (!this.currentDB) {
+      errors.push('No active database session');
+      isHealthy = false;
+    } else {
+      try {
+        // Check user document
+        await this.currentDB.getUser();
+        hasUser = true;
+      } catch {
+        errors.push('User document not found');
+        isHealthy = false;
+      }
+
+      try {
+        // Check settings
+        await this.currentDB.getSettings();
+        hasSettings = true;
+      } catch {
+        errors.push('Settings document not found');
+        isHealthy = false;
+      }
+
+      try {
+        // Count documents
+        const accounts = await this.currentDB.listAccounts(false);
+        accountCount = accounts.length;
+
+        const categories = await this.currentDB.listCategories(false);
+        categoryCount = categories.length;
+
+        const transactions = await this.currentDB.listTransactions(1000);
+        transactionCount = transactions.length;
+      } catch (error) {
+        errors.push('Error counting documents: ' + (error as Error).message);
+        isHealthy = false;
+      }
+    }
+
+    return {
+      isHealthy,
+      hasUser,
+      hasSettings,
+      accountCount,
+      categoryCount,
+      transactionCount,
+      errors
+    };
   }
 
   /**
@@ -283,14 +440,20 @@ export class AuthDatabaseIntegration {
       return null;
     }
 
-    return await dbIntegration.getCurrentStats();
+    if (!this.currentDB) {
+      return null;
+    }
+    return await this.currentDB.getStats();
   }
 
   /**
    * Destroy integration (cleanup)
    */
-  destroy(): void {
-    // The auth manager will handle its own cleanup
+  async destroy(): Promise<void> {
+    if (this.currentDB) {
+      await this.currentDB.destroy();
+      this.currentDB = null;
+    }
     this.currentUserId = null;
   }
 }
@@ -320,9 +483,9 @@ export function getAuthDatabaseIntegration(): AuthDatabaseIntegration | null {
 /**
  * Destroy auth-database integration
  */
-export function destroyAuthDatabaseIntegration(): void {
+export async function destroyAuthDatabaseIntegration(): Promise<void> {
   if (globalAuthDbIntegration) {
-    globalAuthDbIntegration.destroy();
+    await globalAuthDbIntegration.destroy();
     globalAuthDbIntegration = null;
   }
 }
