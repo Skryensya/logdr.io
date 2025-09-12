@@ -5,7 +5,7 @@ import { useSession } from 'next-auth/react';
 import { AuthState, AuthStatus } from '@/types/database';
 import { AuthStateManager, getAuthManager } from '@/lib/auth/auth-state-manager';
 import { initializeAuthDatabaseIntegration, getAuthDatabaseIntegration } from '@/lib/auth/auth-database-integration';
-import { OfflineJWTValidator, MockJWTCreator } from '@/lib/auth/jwt-validator';
+import { simpleJWTService } from '@/lib/auth/simple-jwt-service';
 import { LogdrioDatabase } from '@/lib/database';
 
 /**
@@ -71,35 +71,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   // Timing state
   const [jwtTimeRemaining, setJwtTimeRemaining] = useState(0);
   const [gateTimeRemaining, setGateTimeRemaining] = useState(0);
-  
-  // Mock JWT creator for development (replace with real JWT tokens in production)
-  const [mockJWTCreator] = useState(() => new MockJWTCreator());
 
   // Initialize auth system
   useEffect(() => {
     const initAuth = async () => {
       try {
-        // Setup JWT validator for development
-        const jwtValidator = new OfflineJWTValidator();
-        const { publicKeyJWK } = await mockJWTCreator.generateKeyPair();
-        await jwtValidator.importPublicKey(publicKeyJWK, 'dev-key-1');
-        
-        // Update auth manager config
-        const newAuthManager = getAuthManager({
-          jwtValidator,
-          expectedIssuer: 'logdrio-dev',
-          expectedAudience: 'logdrio-app',
-          clockTolerance: 300,
-          defaultGateDuration: 5
-        });
+        // Initialize simple JWT service
+        await simpleJWTService.initialize();
         
         // Setup auth-database integration
-        const authDbIntegration = initializeAuthDatabaseIntegration(newAuthManager);
-        
-        // Initialize from persisted state
+        const authDbIntegration = initializeAuthDatabaseIntegration(authManager);
         await authDbIntegration.initializeFromPersistedState();
         
-        console.log('Auth system initialized');
+        console.log('Auth system initialized with Simple JWT Service');
       } catch (error) {
         console.error('Error initializing auth system:', error);
         setError('Failed to initialize authentication');
@@ -107,7 +91,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     };
 
     initAuth();
-  }, [mockJWTCreator]);
+  }, [authManager]);
 
   // Listen to auth state changes
   useEffect(() => {
@@ -169,15 +153,26 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
       if (session?.user?.email) {
         try {
-          // Create mock JWT from NextAuth session
-          const mockJWT = await mockJWTCreator.createMockJWT({
-            sub: session.user.email, // Use email as userId for now
-            email: session.user.email,
-            exp: Math.floor(Date.now() / 1000) + 24 * 3600 // 24 hours
-          });
-
-          // Initialize with JWT
-          await authManager.initializeWithJWT(mockJWT);
+          // Check if we have a valid JWT, if not generate one
+          const hasValidJWT = await simpleJWTService.hasValidJWT();
+          
+          if (!hasValidJWT) {
+            // Generate new JWT from session (2 days duration)
+            const jwt = await simpleJWTService.generateJWTFromSession(session);
+            if (jwt) {
+              await authManager.initializeWithJWT(jwt);
+              console.log('New JWT generated and initialized (2 days duration)');
+            }
+          } else {
+            // We have a valid JWT, ensure auth manager is initialized
+            if (authManager.getStatus().state === AuthState.ANON) {
+              const currentJWT = await simpleJWTService.getCurrentJWT();
+              if (currentJWT) {
+                await authManager.initializeWithJWT(currentJWT);
+                console.log('Auth manager initialized with existing JWT');
+              }
+            }
+          }
           
           setError(undefined);
         } catch (error) {
@@ -185,13 +180,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           setError('Failed to process authentication');
         }
       } else if (authStatus.state !== AuthState.ANON) {
-        // No session, logout
+        // No session, clear tokens and reset state
+        simpleJWTService.logout();
         authManager.logout();
       }
     };
 
     handleSessionChange();
-  }, [session, sessionStatus, authManager, mockJWTCreator, authStatus.state]);
+  }, [session, sessionStatus, authManager, authStatus.state]);
 
   // Auth actions
   const unlockWithPIN = async (pin: string): Promise<boolean> => {
@@ -227,19 +223,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   const refreshAuth = async (): Promise<void> => {
-    // In a real app, this would refresh the JWT from the server
-    // For demo, we'll just refresh the current session
-    if (session?.user?.email) {
-      const mockJWT = await mockJWTCreator.createMockJWT({
-        sub: session.user.email,
-        email: session.user.email,
-        exp: Math.floor(Date.now() / 1000) + 24 * 3600
-      });
-      await authManager.initializeWithJWT(mockJWT);
-    }
+    // No refresh needed - JWT lasts 2 days
+    // If expired, user needs to re-authenticate with NextAuth
+    console.log('JWT refresh not needed - token lasts 2 days');
   };
 
   const logout = (): void => {
+    // Clear JWT tokens
+    simpleJWTService.logout();
+    
     authManager.logout();
     // Note: NextAuth logout should be handled by the component using signOut()
   };

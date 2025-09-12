@@ -1,9 +1,9 @@
 "use client";
 
 import { useState, useEffect } from 'react';
-import { useAuth } from '@/contexts/AuthContext';
-import { PINUtils } from '@/lib/auth/pin-gate';
-import { WebAuthnUtils } from '@/lib/auth/webauthn-gate';
+import { useSession } from 'next-auth/react';
+import { pinGate } from '@/lib/auth/pin-gate';
+import { webAuthnGate } from '@/lib/auth/webauthn-gate';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -20,10 +20,12 @@ interface SecurityDrawerProps {
 }
 
 export default function SecurityDrawer({ open, onOpenChange }: SecurityDrawerProps) {
-  const { user, isAuthenticated } = useAuth();
+  const { data: session, status } = useSession();
+  const isAuthenticated = status === 'authenticated';
+  const user = session?.user;
   const [pinStatus, setPinStatus] = useState<'none' | 'set'>('none');
   const [webAuthnSupported, setWebAuthnSupported] = useState(false);
-  const [webAuthnCredentials, setWebAuthnCredentials] = useState<Array<{credentialId: string; createdAt: string}>>([]);
+  const [webAuthnCredentials, setWebAuthnCredentials] = useState<Array<{id: string; created: Date; lastUsed: Date; authenticatorName?: string}>>([]);
   const [showPinSetup, setShowPinSetup] = useState(false);
   const [pin, setPin] = useState('');
   const [confirmPin, setConfirmPin] = useState('');
@@ -33,22 +35,28 @@ export default function SecurityDrawer({ open, onOpenChange }: SecurityDrawerPro
   useEffect(() => {
     if (!isAuthenticated || !user || !open) return;
 
-    // Check PIN status
-    const hasPIN = PINUtils.hasPIN(user.id);
+    // Check PIN status using session user ID
+    const userId = (user as { id?: string })?.id || session?.user?.email;
+    if (!userId) return;
+    
+    const hasPIN = pinGate.hasPIN(userId);
     setPinStatus(hasPIN ? 'set' : 'none');
 
     // Check WebAuthn support and credentials
-    const supported = WebAuthnUtils.isSupported();
+    const supported = webAuthnGate.isSupported();
     setWebAuthnSupported(supported);
     
     if (supported) {
-      const credInfo = WebAuthnUtils.getCredentialInfo(user.id);
+      const credInfo = webAuthnGate.getCredentialInfo(userId);
       setWebAuthnCredentials(credInfo || []);
     }
-  }, [isAuthenticated, user, open]);
+  }, [isAuthenticated, user, open, session]);
 
   const handleSetupPIN = async () => {
     if (!user) return;
+    
+    const userId = (user as { id?: string })?.id || session?.user?.email;
+    if (!userId) return;
 
     if (pin !== confirmPin) {
       setMessage({ type: 'error', text: 'Los PINs no coinciden' });
@@ -61,7 +69,7 @@ export default function SecurityDrawer({ open, onOpenChange }: SecurityDrawerPro
     }
 
     try {
-      await PINUtils.setupPIN(user.id, pin);
+      await pinGate.setupPIN(pin, userId);
       setPinStatus('set');
       setShowPinSetup(false);
       setPin('');
@@ -74,9 +82,12 @@ export default function SecurityDrawer({ open, onOpenChange }: SecurityDrawerPro
 
   const handleRemovePIN = async () => {
     if (!user) return;
+    
+    const userId = (user as { id?: string })?.id || session?.user?.email;
+    if (!userId) return;
 
     try {
-      PINUtils.removePIN(user.id);
+      pinGate.removePIN(userId);
       setPinStatus('none');
       setMessage({ type: 'success', text: 'PIN eliminado exitosamente' });
     } catch {
@@ -86,11 +97,14 @@ export default function SecurityDrawer({ open, onOpenChange }: SecurityDrawerPro
 
   const handleAddPasskey = async () => {
     if (!user) return;
+    
+    const userId = (user as { id?: string })?.id || session?.user?.email;
+    if (!userId) return;
 
     try {
-      await WebAuthnUtils.register(user.id, user.name || 'Usuario', user.email || '');
+      await webAuthnGate.register(userId, user.name || 'Usuario', user.email || '');
       // Refresh credential list
-      const credInfo = WebAuthnUtils.getCredentialInfo(user.id);
+      const credInfo = webAuthnGate.getCredentialInfo(userId);
       setWebAuthnCredentials(credInfo || []);
       setMessage({ type: 'success', text: 'Passkey agregado exitosamente' });
     } catch (error) {
@@ -100,11 +114,14 @@ export default function SecurityDrawer({ open, onOpenChange }: SecurityDrawerPro
 
   const handleRemovePasskey = async (credentialId: string) => {
     if (!user) return;
+    
+    const userId = (user as { id?: string })?.id || session?.user?.email;
+    if (!userId) return;
 
     try {
-      WebAuthnUtils.removeCredential(user.id, credentialId);
+      webAuthnGate.removeCredential(userId, credentialId);
       // Refresh credential list
-      const credInfo = WebAuthnUtils.getCredentialInfo(user.id);
+      const credInfo = webAuthnGate.getCredentialInfo(userId);
       setWebAuthnCredentials(credInfo || []);
       setMessage({ type: 'success', text: 'Passkey eliminado exitosamente' });
     } catch {
@@ -288,20 +305,22 @@ export default function SecurityDrawer({ open, onOpenChange }: SecurityDrawerPro
                     {webAuthnCredentials.length > 0 && (
                       <div className="space-y-2">
                         {webAuthnCredentials.map((cred, index) => (
-                          <div key={cred.credentialId} className="flex items-center justify-between p-3 border rounded-lg">
+                          <div key={cred.id} className="flex items-center justify-between p-3 border rounded-lg">
                             <div className="flex items-center gap-3">
                               <Fingerprint className="h-5 w-5 text-muted-foreground" />
                               <div>
-                                <p className="font-medium text-sm">Passkey #{index + 1}</p>
+                                <p className="font-medium text-sm">
+                                  {cred.authenticatorName || `Passkey #${index + 1}`}
+                                </p>
                                 <p className="text-xs text-muted-foreground">
-                                  Creado: {new Date(cred.createdAt).toLocaleDateString()}
+                                  Creado: {cred.created.toLocaleDateString()}
                                 </p>
                               </div>
                             </div>
                             <Button 
                               variant="destructive" 
                               size="sm"
-                              onClick={() => handleRemovePasskey(cred.credentialId)}
+                              onClick={() => handleRemovePasskey(cred.id)}
                             >
                               <Trash2 className="h-4 w-4" />
                             </Button>
@@ -324,7 +343,8 @@ export default function SecurityDrawer({ open, onOpenChange }: SecurityDrawerPro
                   <li>• Usa un PIN único que no compartas con otras aplicaciones</li>
                   <li>• Los Passkeys son más seguros que los PINs - úsalos cuando sea posible</li>
                   <li>• Configura múltiples métodos de autenticación como respaldo</li>
-                  <li>• Tu sesión durará 2 semanas antes de requerir reautenticación</li>
+                  <li>• Tu sesión durará 2 días y se valida de forma segura offline</li>
+                  <li>• Los tokens se verifican usando criptografía sin enviar datos al servidor</li>
                 </ul>
               </CardContent>
             </Card>

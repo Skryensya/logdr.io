@@ -48,7 +48,8 @@ async function getUserDB(userId: string): Promise<unknown> {
     // Use userId directly, ensuring it's safe for database naming
     const safeUserId = userId.replace(/[^a-z0-9]/gi, '_');
     const dbName = `logdrio-${safeUserId}`;
-    const db = new (PouchDBClass as any)(dbName);
+    // @ts-expect-error - PouchDB typing issue with plugins
+    const db = new PouchDBClass(dbName);
     
     // Inicializar esquema y configuración
     await initializeSchema(db, userId);
@@ -139,7 +140,8 @@ const DESIGN_DOCS = {
 /**
  * Inicializa el esquema de la base de datos
  */
-async function initializeSchema(db: unknown, userId: string): Promise<void> {
+// @ts-expect-error - PouchDB typing issue with plugins
+async function initializeSchema(db: any, userId: string): Promise<void> {
   try {
     // 1. Crear índices
     for (const indexDef of REQUIRED_INDEXES) {
@@ -519,7 +521,8 @@ export async function clearUserData(userId: string): Promise<void> {
       const PouchDBClass = await initializePouchDB();
       const safeUserId = userId.replace(/[^a-z0-9]/gi, '_');
       const dbName = `logdrio-${safeUserId}`;
-      const db = new (PouchDBClass as any)(dbName);
+      // @ts-expect-error - PouchDB typing issue with plugins
+    const db = new PouchDBClass(dbName);
       await db.destroy();
     }
     console.log('Cleared all data for user:', userId);

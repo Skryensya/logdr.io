@@ -3,7 +3,6 @@
 import { useAuth } from "@/contexts/AuthContext";
 import { AuthState } from "@/types/database";
 import { AuthGate } from "./AuthGate";
-import { SessionStatus } from "./SessionStatus";
 import { useSession, signOut } from "next-auth/react";
 
 export default function AuthStatus() {
@@ -20,6 +19,7 @@ export default function AuthStatus() {
     error,
     jwtTimeRemaining,
     gateTimeRemaining,
+    refreshTokenTimeRemaining,
     extendSession,
     refreshAuth
   } = useAuth();
@@ -70,34 +70,50 @@ export default function AuthStatus() {
   return (
     <div className="space-y-4">
       <div className="p-4 border rounded-lg">
-        <div className="flex items-center justify-between">
-          <div>
-            <h3 className="font-medium text-foreground">Sesión Activa</h3>
+        <div className="space-y-2">
+          <h3 className="font-medium text-foreground">Sesión Activa</h3>
+          <p className="text-sm text-muted-foreground">
+            {userDisplayName} ({userEmail})
+          </p>
+          {jwtTimeRemaining > 0 && (
             <p className="text-sm text-muted-foreground">
-              {userDisplayName} ({userEmail})
+              Token JWT: {(() => {
+                const totalSeconds = Math.floor(jwtTimeRemaining / 1000);
+                const hours = Math.floor(totalSeconds / 3600);
+                const minutes = Math.floor((totalSeconds % 3600) / 60);
+                const seconds = totalSeconds % 60;
+                
+                if (hours > 0) {
+                  return `${hours}h ${minutes}m ${seconds}s`;
+                } else if (minutes > 0) {
+                  return `${minutes}m ${seconds}s`;
+                } else {
+                  return `${seconds}s`;
+                }
+              })()}
             </p>
-          </div>
-          <div className="flex items-center space-x-2">
-            <div className={`w-2 h-2 rounded-full ${
-              isUnlocked ? 'bg-green-500' : 'bg-blue-500'
-            }`} />
-            <span className="text-sm font-medium">
-              {isUnlocked ? 'Desbloqueado' : 'Autenticado'}
-            </span>
-          </div>
+          )}
+          {refreshTokenTimeRemaining > 0 && (
+            <p className="text-sm text-muted-foreground">
+              Refresh Token: {(() => {
+                const totalSeconds = Math.floor(refreshTokenTimeRemaining / 1000);
+                const hours = Math.floor(totalSeconds / 3600);
+                const minutes = Math.floor((totalSeconds % 3600) / 60);
+                const seconds = totalSeconds % 60;
+                
+                if (hours > 0) {
+                  return `${hours}h ${minutes}m ${seconds}s`;
+                } else if (minutes > 0) {
+                  return `${minutes}m ${seconds}s`;
+                } else {
+                  return `${seconds}s`;
+                }
+              })()}
+            </p>
+          )}
         </div>
       </div>
 
-      {/* Session status with timing */}
-      {(isAuthenticated || isUnlocked) && (
-        <SessionStatus
-          authState={authState}
-          jwtTimeRemaining={jwtTimeRemaining}
-          gateTimeRemaining={gateTimeRemaining}
-          onExtendSession={() => extendSession(5)}
-          onRefreshJWT={refreshAuth}
-        />
-      )}
     </div>
   );
 }
