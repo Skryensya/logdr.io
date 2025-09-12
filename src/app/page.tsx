@@ -2,10 +2,9 @@
 
 import { useIsAppOffline } from "@/hooks/useIsAppOffline";
 import AuthStatus from "@/components/auth/AuthStatus";
-import SessionTimer from "@/components/auth/SessionTimer";
 import AppLayout from "@/components/layout/AppLayout";
 import { Badge } from "@/components/ui/badge";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 
 export default function Home() {
   const isOffline = useIsAppOffline();
@@ -38,74 +37,10 @@ export default function Home() {
         {/* Auth Status Card */}
         <Card className="border-dashed">
           <CardContent className="pt-6">
-            <div className="space-y-4">
-              <SessionTimer />
-              <AuthStatus />
-            </div>
+            <AuthStatus />
           </CardContent>
         </Card>
 
-        {/* Quick Actions Grid */}
-        <div className="space-y-4">
-          <h2 className="text-2xl font-semibold tracking-tight">Acciones rápidas</h2>
-          <div className="grid gap-4 sm:grid-cols-2">
-            <Card className="group cursor-pointer transition-all duration-200 hover:shadow-md hover:scale-[1.02]">
-              <CardHeader>
-                <div className="flex items-center space-x-3">
-                  <div className="text-3xl">📊</div>
-                  <div>
-                    <CardTitle className="text-xl">Dashboard</CardTitle>
-                    <CardDescription className="mt-1">
-                      Ver resumen de tus logs y métricas en tiempo real
-                    </CardDescription>
-                  </div>
-                </div>
-              </CardHeader>
-            </Card>
-            
-            <Card className="group cursor-pointer transition-all duration-200 hover:shadow-md hover:scale-[1.02]">
-              <CardHeader>
-                <div className="flex items-center space-x-3">
-                  <div className="text-3xl">📝</div>
-                  <div>
-                    <CardTitle className="text-xl">Logs</CardTitle>
-                    <CardDescription className="mt-1">
-                      Gestionar, buscar y analizar todos tus logs
-                    </CardDescription>
-                  </div>
-                </div>
-              </CardHeader>
-            </Card>
-            
-            <Card className="group cursor-pointer transition-all duration-200 hover:shadow-md hover:scale-[1.02]">
-              <CardHeader>
-                <div className="flex items-center space-x-3">
-                  <div className="text-3xl">⚙️</div>
-                  <div>
-                    <CardTitle className="text-xl">Configuración</CardTitle>
-                    <CardDescription className="mt-1">
-                      Personalizar preferencias y ajustes de la aplicación
-                    </CardDescription>
-                  </div>
-                </div>
-              </CardHeader>
-            </Card>
-            
-            <Card className="group cursor-pointer transition-all duration-200 hover:shadow-md hover:scale-[1.02]">
-              <CardHeader>
-                <div className="flex items-center space-x-3">
-                  <div className="text-3xl">📈</div>
-                  <div>
-                    <CardTitle className="text-xl">Análisis</CardTitle>
-                    <CardDescription className="mt-1">
-                      Reportes avanzados y insights de tus datos
-                    </CardDescription>
-                  </div>
-                </div>
-              </CardHeader>
-            </Card>
-          </div>
-        </div>
       </div>
     </AppLayout>
   );

@@ -1,0 +1,59 @@
+
+> logdrio-pwa@0.1.0 build
+> next build --turbopack
+
+   ▲ Next.js 15.5.3 (Turbopack)
+   - Environments: .env.local
+
+   Creating an optimized production build ...
+ ✓ Finished writing to disk in 32ms
+ ✓ Compiled successfully in 5.1s
+   Linting and checking validity of types ...
+
+./src/app/api/auth/[...nextauth]/route.ts
+39:30  Warning: 'account' is defined but never used.  @typescript-eslint/no-unused-vars
+
+./src/app/layout.tsx
+4:10  Warning: 'SessionProvider' is defined but never used.  @typescript-eslint/no-unused-vars
+
+./src/components/auth/AuthGate.tsx
+68:14  Warning: 'error' is defined but never used.  @typescript-eslint/no-unused-vars
+82:14  Warning: 'error' is defined but never used.  @typescript-eslint/no-unused-vars
+
+./src/components/auth/AuthStatus.tsx
+27:17  Warning: 'session' is assigned a value but never used.  @typescript-eslint/no-unused-vars
+
+./src/components/auth/PINSetup.tsx
+22:3  Warning: 'currentPIN' is defined but never used.  @typescript-eslint/no-unused-vars
+
+./src/components/auth/PINUnlock.tsx
+6:10  Warning: 'PINUtils' is defined but never used.  @typescript-eslint/no-unused-vars
+
+./src/components/auth/SessionStatus.tsx
+7:10  Warning: 'PINUtils' is defined but never used.  @typescript-eslint/no-unused-vars
+
+./src/components/auth/WebAuthnUnlock.tsx
+6:10  Warning: 'WebAuthnUtils' is defined but never used.  @typescript-eslint/no-unused-vars
+
+./src/contexts/AuthContext.tsx
+6:10  Warning: 'AuthStateManager' is defined but never used.  @typescript-eslint/no-unused-vars
+205:14  Warning: 'error' is defined but never used.  @typescript-eslint/no-unused-vars
+219:14  Warning: 'error' is defined but never used.  @typescript-eslint/no-unused-vars
+
+./src/hooks/useThemeEffects.ts
+7:33  Warning: 'systemTheme' is assigned a value but never used.  @typescript-eslint/no-unused-vars
+
+info  - Need to disable some ESLint rules? Learn more here: https://nextjs.org/docs/app/api-reference/config/eslint#disabling-rules
+Failed to compile.
+
+./src/components/preferences/PreferencesMenu.tsx:25:7
+Type error: Unused '@ts-expect-error' directive.
+
+[0m [90m 23 |[39m     [90m// Use View Transition API to animate the theme change[39m
+ [90m 24 |[39m     [36mif[39m ([32m'startViewTransition'[39m [36min[39m document) {
+[31m[1m>[22m[39m[90m 25 |[39m       [90m// @ts-expect-error - View Transition API might not be in types yet[39m
+ [90m    |[39m       [31m[1m^[22m[39m
+ [90m 26 |[39m       document[33m.[39mstartViewTransition(() [33m=>[39m {
+ [90m 27 |[39m         setTheme(newTheme)[33m;[39m
+ [90m 28 |[39m       })[33m;[39m[0m
+Next.js build worker exited with code: 1 and signal: null

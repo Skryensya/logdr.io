@@ -1,30 +1,30 @@
 "use client";
 
 import { useAuth } from "@/contexts/AuthContext";
-import { useAuthLifecycle } from "@/hooks/useAuthLifecycle";
-import { useSession } from "next-auth/react";
+import { AuthState } from "@/types/database";
+import { AuthGate } from "./AuthGate";
+import { SessionStatus } from "./SessionStatus";
+import { useSession, signOut } from "next-auth/react";
 
 export default function AuthStatus() {
-  const { user, isAuthenticated, isFirstTimeLogin, isLoading } = useAuth();
-  const sessionInfo = useSession();
-
-  // Use the lifecycle hook to handle auth events
-  useAuthLifecycle({
-    onLogin: (user) => {
-      console.log("🔑 Login event captured:", user.email);
-      // Add custom login logic here
-    },
-    onFirstTimeLogin: (user) => {
-      console.log("🎊 First time login event captured:", user.email);
-      // Show welcome message, onboarding, etc.
-      alert(`Welcome to Logdrio, ${user.name}! This is your first time logging in.`);
-    },
-    onLogout: () => {
-      console.log("👋 Logout event captured");
-      // Add custom logout logic here
-      alert("You have been logged out. See you soon!");
-    },
-  });
+  const { 
+    authState, 
+    isAuthenticated, 
+    isUnlocked, 
+    userEmail, 
+    userDisplayName,
+    availableAuthMethods,
+    unlockWithPIN,
+    unlockWithWebAuthn,
+    isLoading,
+    error,
+    jwtTimeRemaining,
+    gateTimeRemaining,
+    extendSession,
+    refreshAuth
+  } = useAuth();
+  
+  const { data: session } = useSession();
 
   if (isLoading) {
     return <div className="text-gray-500">Loading auth status...</div>;
@@ -39,25 +39,64 @@ export default function AuthStatus() {
     );
   }
 
-  const expiresAt = sessionInfo.data?.expires ? new Date(sessionInfo.data.expires) : null;
-
-  return (
-    <div className="p-4 bg-green-100 dark:bg-green-900 rounded-lg">
-      <h3 className="font-medium text-green-800 dark:text-green-200">Auth Status</h3>
-      <p className="text-green-700 dark:text-green-300">
-        Authenticated as: {user?.name} ({user?.email})
-      </p>
-      {expiresAt && (
-        <p className="text-xs text-green-600 dark:text-green-400 mt-1">
-          Session expires: {expiresAt.toLocaleString('es-ES')}
-        </p>
-      )}
-      {isFirstTimeLogin && (
-        <div className="mt-2 p-2 bg-blue-100 dark:bg-blue-900 rounded">
-          <p className="text-blue-800 dark:text-blue-200 text-sm">
-            🎉 First time login detected! Welcome aboard!
+  // Show auth gate if user is gated
+  if (authState === AuthState.GATED) {
+    return (
+      <div className="space-y-4">
+        <div className="p-4 bg-yellow-100 dark:bg-yellow-900 rounded-lg">
+          <h3 className="font-medium text-yellow-800 dark:text-yellow-200">Authentication Required</h3>
+          <p className="text-yellow-700 dark:text-yellow-300">
+            Please unlock your session to continue
           </p>
         </div>
+        
+        <AuthGate
+          authState={authState}
+          userId={userEmail} // Using email as userId for now
+          userEmail={userEmail}
+          userDisplayName={userDisplayName}
+          availableMethods={availableAuthMethods}
+          onPINUnlock={unlockWithPIN}
+          onWebAuthnUnlock={unlockWithWebAuthn}
+          onSetupComplete={() => window.location.reload()}
+          onLogout={() => signOut()}
+          isLoading={isLoading}
+          error={error}
+        />
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-4">
+      <div className="p-4 border rounded-lg">
+        <div className="flex items-center justify-between">
+          <div>
+            <h3 className="font-medium text-foreground">Sesión Activa</h3>
+            <p className="text-sm text-muted-foreground">
+              {userDisplayName} ({userEmail})
+            </p>
+          </div>
+          <div className="flex items-center space-x-2">
+            <div className={`w-2 h-2 rounded-full ${
+              isUnlocked ? 'bg-green-500' : 'bg-blue-500'
+            }`} />
+            <span className="text-sm font-medium">
+              {isUnlocked ? 'Desbloqueado' : 'Autenticado'}
+            </span>
+          </div>
+        </div>
+      </div>
+
+      {/* Session status with timing */}
+      {(isAuthenticated || isUnlocked) && (
+        <SessionStatus
+          authState={authState}
+          jwtTimeRemaining={jwtTimeRemaining}
+          gateTimeRemaining={gateTimeRemaining}
+          onExtendSession={() => extendSession(5)}
+          onRefreshJWT={refreshAuth}
+        />
       )}
     </div>
   );

@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Menu, X, LogOut } from "lucide-react";
+import { Menu, X, LogOut, Shield } from "lucide-react";
 import { useSession, signOut } from "next-auth/react";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -11,8 +11,8 @@ import {
   PopoverTrigger 
 } from "@/components/ui/popover";
 import PreferencesMenu from "@/components/preferences/PreferencesMenu";
-import LoginButton from "@/components/auth/LoginButton";
 import { useMediaQuery } from "@/hooks/useMediaQuery";
+import { signIn } from "next-auth/react";
 
 export default function Header() {
   const { data: session } = useSession();
@@ -59,7 +59,17 @@ export default function Header() {
                           {session.user?.email}
                         </p>
                       </div>
-                      <div className="border-t pt-2">
+                      <div className="border-t pt-2 space-y-1">
+                        <Link href="/security">
+                          <Button 
+                            variant="ghost" 
+                            size="sm" 
+                            className="w-full justify-start"
+                          >
+                            <Shield className="mr-2 h-4 w-4" />
+                            Seguridad
+                          </Button>
+                        </Link>
                         <Button 
                           variant="ghost" 
                           size="sm" 
@@ -74,7 +84,9 @@ export default function Header() {
                   </PopoverContent>
                 </Popover>
               ) : (
-                <LoginButton />
+                <Button onClick={() => signIn('google')}>
+                  Iniciar sesión
+                </Button>
               )}
             </nav>
           )}
@@ -124,22 +136,43 @@ export default function Header() {
                     </p>
                   </div>
                 </div>
-                <Button 
-                  variant="outline" 
-                  size="sm" 
-                  className="w-full justify-start"
-                  onClick={() => {
-                    signOut();
-                    setMobileMenuOpen(false);
-                  }}
-                >
-                  <LogOut className="mr-2 h-4 w-4" />
-                  Cerrar sesión
-                </Button>
+                <div className="space-y-2">
+                  <Link href="/security">
+                    <Button 
+                      variant="outline" 
+                      size="sm" 
+                      className="w-full justify-start"
+                      onClick={() => setMobileMenuOpen(false)}
+                    >
+                      <Shield className="mr-2 h-4 w-4" />
+                      Seguridad
+                    </Button>
+                  </Link>
+                  <Button 
+                    variant="outline" 
+                    size="sm" 
+                    className="w-full justify-start"
+                    onClick={() => {
+                      signOut();
+                      setMobileMenuOpen(false);
+                    }}
+                  >
+                    <LogOut className="mr-2 h-4 w-4" />
+                    Cerrar sesión
+                  </Button>
+                </div>
               </div>
             ) : (
               <div className="space-y-4">
-                <LoginButton />
+                <Button 
+                  onClick={() => {
+                    signIn('google');
+                    setMobileMenuOpen(false);
+                  }}
+                  className="w-full"
+                >
+                  Iniciar sesión
+                </Button>
               </div>
             )}
           </div>

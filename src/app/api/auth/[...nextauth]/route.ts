@@ -17,10 +17,10 @@ const handler = NextAuth({
   ],
   session: {
     strategy: "jwt",
-    maxAge: 60 * 60, // 1 hour in seconds
+    maxAge: 14 * 24 * 60 * 60, // 2 weeks in seconds
   },
   jwt: {
-    maxAge: 60 * 60, // 1 hour in seconds
+    maxAge: 14 * 24 * 60 * 60, // 2 weeks in seconds
   },
   callbacks: {
     async signIn({ user, account, profile }) {
@@ -29,10 +29,11 @@ const handler = NextAuth({
     },
     async session({ session, token }) {
       if (session.user) {
+        // @ts-expect-error - NextAuth types don't include id field
         session.user.id = token.sub!;
       }
       // Add expiration info to session
-      session.expires = new Date(Date.now() + 60 * 60 * 1000).toISOString(); // 1 hour from now
+      session.expires = new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString(); // 2 weeks from now
       return session;
     },
     async jwt({ token, user, account }) {
@@ -41,8 +42,8 @@ const handler = NextAuth({
       }
       // Set token expiration
       const now = Date.now();
-      const oneHour = 60 * 60 * 1000; // 1 hour in milliseconds
-      token.exp = Math.floor((now + oneHour) / 1000); // JWT exp is in seconds
+      const twoWeeks = 14 * 24 * 60 * 60 * 1000; // 2 weeks in milliseconds
+      token.exp = Math.floor((now + twoWeeks) / 1000); // JWT exp is in seconds
       return token;
     },
   },
