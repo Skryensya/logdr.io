@@ -28,6 +28,14 @@ export default function TransactionsTab() {
 
   const columns: Column<Transaction>[] = [
     {
+      key: '#',
+      label: '#',
+      render: (_, item) => {
+        const index = filteredTransactions.findIndex(t => t._id === item._id);
+        return filteredTransactions.length - index;
+      }
+    },
+    {
       key: 'date',
       label: 'Fecha',
       render: (value) => new Date(value).toLocaleDateString()

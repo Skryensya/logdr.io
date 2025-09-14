@@ -13,6 +13,21 @@ export default function AccountsTab() {
 
   const columns: Column<Account>[] = [
     {
+      key: '#',
+      label: '#',
+      render: (_, item) => {
+        const activeIndex = activeAccounts.findIndex(a => a._id === item._id);
+        const archivedIndex = archivedAccounts.findIndex(a => a._id === item._id);
+        
+        if (activeIndex >= 0) {
+          return activeAccounts.length - activeIndex;
+        } else if (archivedIndex >= 0) {
+          return archivedAccounts.length - archivedIndex;
+        }
+        return '';
+      }
+    },
+    {
       key: 'name',
       label: 'Nombre',
       render: (value, account) => (

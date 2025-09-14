@@ -174,9 +174,13 @@ export class ValidatedLogdrioDatabase {
     };
   }
 
-  async listTransactions(limit = 50, startkey?: string): Promise<Transaction[]> {
+  async listTransactions(limit?: number, startkey?: string): Promise<Transaction[]> {
     const transactions = await this.db.listTransactions(limit, startkey);
     return transactions.map(transaction => validateTransaction(transaction) as Transaction);
+  }
+
+  async countTransactions(): Promise<number> {
+    return await this.db.countTransactions();
   }
 
   // Transaction line operations (immutable)

@@ -19,7 +19,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { toast } from "sonner";
-import { useTransactions } from "@/hooks/useTransactions";
+import { useDatabase } from "@/contexts/DatabaseContext";
 import { useAccounts } from "@/hooks/useAccounts";
 import { useCategories } from "@/hooks/useCategories";
 import { format, subDays } from "date-fns";
@@ -27,13 +27,16 @@ import { format, subDays } from "date-fns";
 export default function DebugMenu() {
   const [showConfirmModal, setShowConfirmModal] = useState(false);
   const [isGenerating, setIsGenerating] = useState(false);
-  const { createTransaction } = useTransactions();
+  const { createTransaction, clearAllTransactions } = useDatabase();
   const { accounts } = useAccounts();
   const { getCategoryOptions } = useCategories();
 
   const nukeAllData = async () => {
     try {
-      // Clear all localStorage
+      // Clear all simple data
+      await clearAllTransactions();
+      
+      // Clear all localStorage (this will handle everything)
       localStorage.clear();
 
       // Clear all sessionStorage
@@ -59,39 +62,10 @@ export default function DebugMenu() {
             });
           })
         );
-      } else {
-        // Fallback for older browsers - try to delete common database names
-        const commonDbNames = [
-          'logdrio-db',
-          'user-database',
-          'transactions-db',
-          'accounts-db',
-          'categories-db'
-        ];
-        
-        await Promise.all(
-          commonDbNames.map(dbName => {
-            return new Promise<void>((resolve) => {
-              const deleteReq = indexedDB.deleteDatabase(dbName);
-              deleteReq.onsuccess = () => resolve();
-              deleteReq.onerror = () => resolve(); // Don't fail if DB doesn't exist
-              deleteReq.onblocked = () => resolve();
-            });
-          })
-        );
       }
 
-      // Clear all cookies (same-origin only)
-      document.cookie.split(";").forEach(cookie => {
-        const eqPos = cookie.indexOf("=");
-        const name = eqPos > -1 ? cookie.substr(0, eqPos).trim() : cookie.trim();
-        document.cookie = `${name}=;expires=Thu, 01 Jan 1970 00:00:00 GMT;path=/`;
-        document.cookie = `${name}=;expires=Thu, 01 Jan 1970 00:00:00 GMT;path=/;domain=${window.location.hostname}`;
-        document.cookie = `${name}=;expires=Thu, 01 Jan 1970 00:00:00 GMT;path=/;domain=.${window.location.hostname}`;
-      });
-
       toast.success("🧹 Todos los datos han sido eliminados", {
-        description: "IndexedDB, LocalStorage, SessionStorage y cookies limpiados"
+        description: "Todas las transacciones y datos locales limpiados"
       });
 
       // Reload the page after a short delay
@@ -113,190 +87,125 @@ export default function DebugMenu() {
   };
 
   const generateRandomTransactions = async (count: number = 100) => {
-    if (accounts.length === 0) {
-      toast.error("No hay cuentas disponibles", {
-        description: "Crea al menos una cuenta antes de generar transacciones"
-      });
-      return;
-    }
-
     setIsGenerating(true);
-    const categoryOptions = getCategoryOptions();
-    const availableAccounts = accounts.filter(acc => !acc.archived && acc.visible && acc._id);
     
-    const transactionTypes = ['expense', 'income', 'transfer'] as const;
-    const expenseDescriptions = [
-      "Compra en supermercado",
-      "Gasolina para el auto",
-      "Almuerzo en restaurante",
-      "Compra en farmacia",
-      "Transporte público",
-      "Café con amigos",
-      "Compra en línea",
-      "Servicios básicos",
-      "Reparación del auto",
-      "Compras varias"
-    ];
-    
-    const incomeDescriptions = [
-      "Salario mensual",
-      "Freelance trabajo",
-      "Venta de artículo",
-      "Reembolso de gastos",
-      "Intereses bancarios",
-      "Bono de rendimiento",
-      "Ingreso extra",
-      "Comisión por venta",
-      "Dividendos",
-      "Pago por servicios"
-    ];
+    const descriptions = {
+      expense: [
+        "Compra en supermercado", "Gasolina para el auto", "Almuerzo en restaurante",
+        "Pago de electricidad", "Pago de agua", "Internet y cable",
+        "Reparación auto", "Medicamentos", "Ropa y vestuario",
+        "Gimnasio mensual", "Netflix", "Spotify", "Transporte público"
+      ],
+      income: [
+        "Salario mensual", "Freelance trabajo", "Venta de artículo",
+        "Bonificación", "Dividendos", "Arriendo recibido",
+        "Trabajo extra", "Comisión de ventas", "Reembolso"
+      ],
+      transfer: [
+        "Transferencia entre cuentas", "Ahorro mensual", "Pago de deuda",
+        "Inversión", "Depósito a plazo", "Retiro de inversión"
+      ]
+    };
 
-    const transferDescriptions = [
-      "Transferencia entre cuentas",
-      "Ahorro mensual",
-      "Pago de deuda",
-      "Inversión",
-      "Reserva de emergencia",
-      "Fondos para vacaciones",
-      "Separar dinero",
-      "Reorganización de fondos"
-    ];
+    // Target balance: 3,000,000 CLP
+    const targetBalance = 3000000;
+    
+    // Calculate realistic income/expense ratio
+    const incomeRatio = 0.4; // 40% income
+    const expenseRatio = 0.55; // 55% expenses  
+    const transferRatio = 0.05; // 5% transfers
+    
+    const incomeCount = Math.floor(count * incomeRatio);
+    const expenseCount = Math.floor(count * expenseRatio);
+    const transferCount = count - incomeCount - expenseCount;
+    
+    // Calculate amounts to reach target balance
+    const totalIncome = targetBalance * 1.2; // 20% more income than target
+    const totalExpense = totalIncome - targetBalance;
+    const totalTransfer = targetBalance * 0.1; // 10% for transfers
+    
+    const avgIncomeAmount = Math.floor(totalIncome / incomeCount);
+    const avgExpenseAmount = Math.floor(totalExpense / expenseCount);
+    const avgTransferAmount = Math.floor(totalTransfer / transferCount);
 
     try {
-      for (let i = 0; i < count; i++) {
-        const type = faker.helpers.arrayElement(transactionTypes);
-        const date = format(faker.date.between({ 
-          from: subDays(new Date(), 90), 
-          to: new Date() 
-        }), 'yyyy-MM-dd');
+      console.log(`🚀 Generando ${count} transacciones realistas...`);
+      console.log(`📊 Target balance: $${targetBalance.toLocaleString()}`);
+      console.log(`💰 ${incomeCount} ingresos (~$${avgIncomeAmount.toLocaleString()} c/u)`);
+      console.log(`💸 ${expenseCount} gastos (~$${avgExpenseAmount.toLocaleString()} c/u)`);
+      console.log(`🔄 ${transferCount} transferencias (~$${avgTransferAmount.toLocaleString()} c/u)`);
+      
+      const transactions = [];
+      
+      // Generate income transactions
+      for (let i = 0; i < incomeCount; i++) {
+        const variation = faker.number.float({ min: 0.5, max: 1.8 });
+        const amount = Math.floor(avgIncomeAmount * variation);
+        const description = faker.helpers.arrayElement(descriptions.income);
+        const date = generateRandomDate();
         
-        let description: string;
-        let amount: number;
-        let fromAccount: typeof availableAccounts[0];
-        let toAccount: typeof availableAccounts[0] | undefined;
-
-        switch (type) {
-          case 'expense':
-            description = faker.helpers.arrayElement(expenseDescriptions);
-            amount = faker.number.int({ min: 500, max: 50000 }); // $500 - $50,000 CLP
-            fromAccount = faker.helpers.arrayElement(availableAccounts);
-            break;
-            
-          case 'income':
-            description = faker.helpers.arrayElement(incomeDescriptions);
-            amount = faker.number.int({ min: 5000, max: 200000 }); // $5,000 - $200,000 CLP
-            fromAccount = faker.helpers.arrayElement(availableAccounts);
-            break;
-            
-          case 'transfer':
-            description = faker.helpers.arrayElement(transferDescriptions);
-            amount = faker.number.int({ min: 1000, max: 100000 }); // $1,000 - $100,000 CLP
-            fromAccount = faker.helpers.arrayElement(availableAccounts);
-            // Ensure different account for transfer
-            const otherAccounts = availableAccounts.filter(acc => acc._id !== fromAccount._id);
-            if (otherAccounts.length === 0) {
-              // Skip if only one account available
-              continue;
-            }
-            toAccount = faker.helpers.arrayElement(otherAccounts);
-            break;
-        }
-
-        const categoryId = categoryOptions.length > 0 && faker.datatype.boolean(0.7) 
-          ? faker.helpers.arrayElement(categoryOptions).value 
-          : undefined;
-
-        const tags = faker.datatype.boolean(0.3) 
-          ? faker.helpers.arrayElements(['trabajo', 'personal', 'urgente', 'recurrente', 'planeado'], { min: 1, max: 2 })
-          : undefined;
-
-        // Create transaction input
-        const transactionInput = {
-          date,
-          description,
-          categoryId,
-          tags
-        };
-
-        // Create transaction lines based on type
-        let lines;
-        const amountInCents = Math.round(amount * 100);
-        const currency = fromAccount!.defaultCurrency;
-
-        switch (type) {
-          case 'expense':
-            lines = [
-              {
-                accountId: fromAccount!._id,
-                amount: -amountInCents,
-                currency,
-                categoryId
-              },
-              {
-                accountId: 'account::expense-account',
-                amount: amountInCents,
-                currency,
-                categoryId
-              }
-            ];
-            break;
-            
-          case 'income':
-            lines = [
-              {
-                accountId: fromAccount!._id,
-                amount: amountInCents,
-                currency,
-                categoryId
-              },
-              {
-                accountId: 'account::income-account',
-                amount: -amountInCents,
-                currency,
-                categoryId
-              }
-            ];
-            break;
-            
-          case 'transfer':
-            const toCurrency = toAccount!.defaultCurrency;
-            lines = [
-              {
-                accountId: fromAccount!._id,
-                amount: -amountInCents,
-                currency,
-                categoryId
-              },
-              {
-                accountId: toAccount!._id,
-                amount: amountInCents,
-                currency: toCurrency,
-                categoryId
-              }
-            ];
-            break;
-        }
-
-        await createTransaction(transactionInput, lines!);
+        transactions.push({ description, amount, type: 'income' as const, date });
+      }
+      
+      // Generate expense transactions
+      for (let i = 0; i < expenseCount; i++) {
+        const variation = faker.number.float({ min: 0.3, max: 2.0 });
+        const amount = Math.floor(avgExpenseAmount * variation);
+        const description = faker.helpers.arrayElement(descriptions.expense);
+        const date = generateRandomDate();
         
-        // Small delay to avoid overwhelming the system
-        if (i % 10 === 0) {
-          await new Promise(resolve => setTimeout(resolve, 100));
+        transactions.push({ description, amount, type: 'expense' as const, date });
+      }
+      
+      // Generate transfer transactions
+      for (let i = 0; i < transferCount; i++) {
+        const variation = faker.number.float({ min: 0.5, max: 1.5 });
+        const amount = Math.floor(avgTransferAmount * variation);
+        const description = faker.helpers.arrayElement(descriptions.transfer);
+        const date = generateRandomDate();
+        
+        transactions.push({ description, amount, type: 'transfer' as const, date });
+      }
+      
+      // Sort by date (oldest first) for realistic chronology
+      transactions.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+      
+      // Create transactions in database
+      for (let i = 0; i < transactions.length; i++) {
+        const tx = transactions[i];
+        await createTransaction(tx.description, tx.amount, tx.type, 'CLP', tx.date);
+        
+        if (i % 20 === 0) {
+          console.log(`✅ Creadas ${i + 1}/${transactions.length} transacciones`);
         }
       }
 
-      toast.success(`🎯 ${count} transacciones generadas`, {
-        description: "Transacciones aleatorias creadas exitosamente"
+      const actualTotal = transactions.reduce((sum, tx) => {
+        return sum + (tx.type === 'income' ? tx.amount : tx.type === 'expense' ? -tx.amount : 0);
+      }, 0);
+
+      console.log(`🎯 Completadas todas las ${count} transacciones`);
+      console.log(`💰 Balance calculado: $${actualTotal.toLocaleString()} CLP`);
+      toast.success(`🎯 ${count} transacciones creadas`, {
+        description: `Balance final: $${actualTotal.toLocaleString()} CLP - Periodo: 3 meses`
       });
 
     } catch (error) {
-      console.error("Error generating transactions:", error);
+      console.error("❌ Error generating transactions:", error);
       toast.error("Error generando transacciones", {
-        description: "Revisa la consola para más detalles"
+        description: error instanceof Error ? error.message : "Error desconocido"
       });
     } finally {
       setIsGenerating(false);
     }
+  };
+
+  // Generate random date within the last 3 months
+  const generateRandomDate = () => {
+    const today = new Date();
+    const threeMonthsAgo = new Date(today.getFullYear(), today.getMonth() - 3, today.getDate());
+    const randomTime = faker.date.between({ from: threeMonthsAgo, to: today });
+    return randomTime.toISOString().split('T')[0]; // YYYY-MM-DD format
   };
 
   // Only show in development or if explicitly enabled
@@ -342,20 +251,20 @@ export default function DebugMenu() {
               <AlertTriangle className="h-5 w-5 text-destructive" />
               <DialogTitle>⚠️ Acción Destructiva</DialogTitle>
             </div>
-            <DialogDescription className="text-left space-y-2">
-              <p>
+            <div className="text-left space-y-3 text-sm text-muted-foreground">
+              <div>
                 Esta acción eliminará <strong>TODOS</strong> los datos locales:
-              </p>
-              <ul className="list-disc list-inside space-y-1 text-sm">
+              </div>
+              <ul className="list-disc list-inside space-y-1">
                 <li>Todas las bases de datos IndexedDB</li>
                 <li>Todo el contenido de LocalStorage</li>
                 <li>Todo el contenido de SessionStorage</li>
                 <li>Todas las cookies del sitio</li>
               </ul>
-              <p className="text-destructive font-medium">
+              <div className="text-destructive font-medium">
                 Esta acción NO se puede deshacer.
-              </p>
-            </DialogDescription>
+              </div>
+            </div>
           </DialogHeader>
           <DialogFooter className="sm:justify-start">
             <Button

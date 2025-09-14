@@ -5,10 +5,7 @@ const DYNAMIC_CACHE_NAME = 'logdrio-dynamic-v1';
 // Assets to cache on install
 const STATIC_ASSETS = [
   '/',
-  '/favicon.ico',
-  '/_next/static/css/app/layout.css',
-  '/_next/static/css/app/page.css',
-  '/offline.html'
+  '/favicon.ico'
 ];
 
 // API routes to cache with network-first strategy
@@ -21,7 +18,11 @@ self.addEventListener('install', event => {
     Promise.all([
       caches.open(STATIC_CACHE_NAME).then(cache => {
         console.log('Service Worker: Caching static assets');
-        return cache.addAll(STATIC_ASSETS.filter(asset => asset !== '/offline.html'));
+        return cache.addAll(STATIC_ASSETS).catch(error => {
+          console.warn('Service Worker: Failed to cache some static assets:', error);
+          // Continue with installation even if some assets fail
+          return Promise.resolve();
+        });
       }),
       // Cache offline page separately to avoid network requests
       caches.open(STATIC_CACHE_NAME).then(cache => {

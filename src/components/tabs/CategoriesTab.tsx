@@ -13,6 +13,21 @@ export default function CategoriesTab() {
 
   const columns: Column<Category>[] = [
     {
+      key: '#',
+      label: '#',
+      render: (_, item) => {
+        const activeIndex = flattenedActiveCategories.findIndex(c => c._id === item._id);
+        const archivedIndex = flattenedArchivedCategories.findIndex(c => c._id === item._id);
+        
+        if (activeIndex >= 0) {
+          return flattenedActiveCategories.length - activeIndex;
+        } else if (archivedIndex >= 0) {
+          return flattenedArchivedCategories.length - archivedIndex;
+        }
+        return '';
+      }
+    },
+    {
       key: 'name',
       label: 'Nombre',
       render: (value, category) => (

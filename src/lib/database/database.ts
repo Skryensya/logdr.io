@@ -8,6 +8,7 @@ import {
 } from '@/types/database';
 import { ulid } from 'ulid';
 import { getUserDB, clearUserData, getDatabaseStats, userDBs } from './manager';
+import { dbLogger } from '@/lib/utils/logger';
 
 /**
  * Clase principal para gestionar la base de datos de un usuario
@@ -24,7 +25,14 @@ export class LogdrioDatabase {
    * Inicializa la conexión a la base de datos
    */
   async initialize(): Promise<void> {
-    this.db = await getUserDB(this.userId);
+    dbLogger.debug('Initializing database for user:', this.userId);
+    try {
+      this.db = await getUserDB(this.userId);
+      dbLogger.info('Database initialized successfully for user:', this.userId);
+    } catch (error) {
+      dbLogger.error('Failed to initialize database for user:', this.userId, error);
+      throw error;
+    }
   }
 
   /**
@@ -185,9 +193,19 @@ export class LogdrioDatabase {
     transaction: Omit<Transaction, '_id' | '_rev' | 'createdAt' | 'updatedAt' | 'yearMonth' | 'lineCount'>,
     lines: Omit<TransactionLine, '_id' | 'transactionId' | 'createdAt' | 'yearMonth' | 'isDebit'>[]
   ): Promise<{ transaction: Transaction; lines: TransactionLine[] }> {
+    dbLogger.debug('Starting createTransaction...', { transaction, linesCount: lines.length });
+    
+    // Verificar que la DB esté inicializada
+    if (!this.db) {
+      dbLogger.error('Database not initialized');
+      throw new Error('Database not initialized');
+    }
+    
     const txnId = `txn::${ulid()}` as const;
     const now = new Date().toISOString();
     const yearMonth = transaction.date.substring(0, 7); // YYYY-MM
+    
+    dbLogger.debug('Creating transaction with ID:', txnId);
     
     const newTransaction: Transaction = {
       _id: txnId,
@@ -198,27 +216,63 @@ export class LogdrioDatabase {
       updatedAt: now
     };
     
-    const newLines: TransactionLine[] = lines.map(line => ({
-      _id: `line::${ulid()}` as const,
-      transactionId: txnId,
-      ...line,
-      date: transaction.date,
-      yearMonth,
-      isDebit: line.amount < 0,
-      createdAt: now
-    }));
+    const newLines: TransactionLine[] = lines.map((line, index) => {
+      const lineId = `line::${ulid()}` as const;
+      dbLogger.debug(`Creating line ${index + 1}/${lines.length} with ID: ${lineId}`);
+      return {
+        _id: lineId,
+        transactionId: txnId,
+        ...line,
+        date: transaction.date,
+        yearMonth,
+        isDebit: line.amount < 0,
+        createdAt: now
+      };
+    });
     
     // Validar balance (debe sumar cero)
     const totalAmount = newLines.reduce((sum, line) => sum + line.amount, 0);
+    dbLogger.debug('Transaction balance check:', { totalAmount, shouldBeZero: totalAmount === 0 });
+    
     if (totalAmount !== 0) {
+      dbLogger.error('Balance error - transaction lines must balance to zero:', totalAmount);
       throw new Error(`Transaction lines must balance to zero. Current total: ${totalAmount}`);
     }
     
     // Insertar en batch
     const docs = [newTransaction, ...newLines];
-    await this.db.bulkDocs(docs);
+    dbLogger.debug('Attempting to save batch of documents:', {
+      count: docs.length,
+      docs: docs.map(doc => ({ id: doc._id, type: doc._id.split('::')[0] }))
+    });
     
-    return { transaction: newTransaction, lines: newLines };
+    try {
+      const result = await (this.db as any).bulkDocs(docs);
+      dbLogger.debug('BulkDocs result:', result);
+      
+      // Verificar si hay errores en el resultado
+      const errors = result.filter((item: any) => item.error);
+      if (errors.length > 0) {
+        dbLogger.error('BulkDocs errors found:', errors);
+        throw new Error(`BulkDocs failed: ${errors.map((e: any) => e.error).join(', ')}`);
+      }
+      
+      dbLogger.info('Transaction created successfully:', txnId);
+      
+      // Force a compact to ensure data is written to disk
+      try {
+        await (this.db as any).compact();
+        dbLogger.debug('Database compacted after transaction creation');
+      } catch (compactError) {
+        dbLogger.warn('Error compacting database:', compactError);
+      }
+      
+      return { transaction: newTransaction, lines: newLines };
+      
+    } catch (error) {
+      dbLogger.error('BulkDocs operation failed:', { error, docsCount: docs.length });
+      throw new Error(`Failed to save transaction: ${error instanceof Error ? error.message : String(error)}`);
+    }
   }
 
   async getTransaction(id: Transaction['_id']): Promise<Transaction> {
@@ -245,20 +299,31 @@ export class LogdrioDatabase {
     return { transaction, lines: sortedLines };
   }
 
-  async listTransactions(limit = 50, startkey?: string): Promise<Transaction[]> {
+  async listTransactions(limit?: number, startkey?: string): Promise<Transaction[]> {
     const options: Record<string, unknown> = {
       selector: {
         _id: { $regex: "^txn::" }
-      },
+      }
       // Removed sort to fix "Cannot sort when using the default index" error
-      limit
     };
+    
+    // Only apply limit if explicitly provided
+    if (limit !== undefined) {
+      options.limit = limit;
+    }
     
     if (startkey) {
       options.skip = startkey;
     }
     
-    const result = await this.db.find(options);
+    const result = await (this.db as any).find(options);
+    
+    dbLogger.debug('listTransactions query result:', { 
+      found: result.docs.length, 
+      limit, 
+      startkey,
+      options 
+    });
     
     // Sort in memory as a temporary fix
     const sortedDocs = result.docs.sort((a: any, b: any) => {
@@ -274,7 +339,33 @@ export class LogdrioDatabase {
       return bCreated - aCreated; // desc order by createdAt
     });
     
+    dbLogger.info('listTransactions returning:', sortedDocs.length);
     return sortedDocs;
+  }
+
+  async countTransactions(): Promise<number> {
+    dbLogger.debug('Counting transactions...');
+    const result = await (this.db as any).find({
+      selector: {
+        _id: { $regex: "^txn::" }
+      },
+      fields: ['_id'] // Only fetch IDs for counting
+    });
+    dbLogger.info('Total transactions in database:', result.docs.length);
+    
+    // Also get some basic database stats
+    try {
+      const info = await (this.db as any).info();
+      dbLogger.debug('Database info during count:', {
+        doc_count: info.doc_count,
+        update_seq: info.update_seq,
+        adapter: info.adapter
+      });
+    } catch (error) {
+      dbLogger.warn('Error getting database info during count:', error);
+    }
+    
+    return result.docs.length;
   }
 
   /**

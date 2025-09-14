@@ -14,6 +14,7 @@ import { Badge } from "@/components/ui/badge";
 import PreferencesMenu from "@/components/preferences/PreferencesMenu";
 import DebugMenu from "@/components/debug/DebugMenu";
 import SecurityDrawer from "@/components/security/SecurityDrawer";
+import { DatabaseStatus } from "@/components/database/DatabaseStatus";
 import { useMediaQuery } from "@/hooks/useMediaQuery";
 import { useIsAppOffline } from "@/hooks/useIsAppOffline";
 import { signIn } from "next-auth/react";
@@ -35,12 +36,12 @@ export default function Header() {
           {/* Logo */}
           <div className="flex items-center gap-3">
             <h1 className="text-xl font-bold text-primary">Logdrio</h1>
-            {/* Status Banner */}
-            <div className="flex justify-center">
+            {/* Status Badges */}
+            <div className="flex gap-2">
+              <DatabaseStatus />
               <Badge
                 variant={isOffline ? "destructive" : "default"}
                 className="flex items-center gap-2 scale-80 tracking-wide rounded-2xl"
-                
               >
                 <div
                   className={`w-2 h-2 rounded-full ${
